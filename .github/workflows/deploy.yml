@@ -1,0 +1,92 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+  S3_BUCKET: optiview-ads-demo-031949581493-eu-west-2
+  CLOUDFRONT_DISTRIBUTION_ID: E35S9M2T3Q49L5
+  PRODUCTION_URL: https://d2aunrdp7zsc16.cloudfront.net/
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate build configuration
+        env:
+          VITE_THEOPLAYER_LICENSE: ${{ secrets.VITE_THEOPLAYER_LICENSE }}
+          VITE_THEO_LIVE_API_TOKEN: ${{ secrets.VITE_THEO_LIVE_API_TOKEN }}
+        run: |
+          test -n "$VITE_THEOPLAYER_LICENSE"
+          test -n "$VITE_THEO_LIVE_API_TOKEN"
+
+      - name: Build application
+        env:
+          VITE_THEOPLAYER_LICENSE: ${{ secrets.VITE_THEOPLAYER_LICENSE }}
+          VITE_THEO_LIVE_API_TOKEN: ${{ secrets.VITE_THEO_LIVE_API_TOKEN }}
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: optiview-ads-hls-demo
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync dist "s3://$S3_BUCKET" \
+            --delete \
+            --cache-control "public,max-age=86400"
+          aws s3 cp dist/index.html "s3://$S3_BUCKET/index.html" \
+            --content-type "text/html; charset=utf-8" \
+            --cache-control "no-cache,no-store,must-revalidate"
+
+      - name: Invalidate CloudFront
+        id: invalidate
+        run: |
+          invalidation_id=$(aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/*" \
+            --query "Invalidation.Id" \
+            --output text)
+          echo "id=$invalidation_id" >> "$GITHUB_OUTPUT"
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --id "$invalidation_id"
+
+      - name: Verify deployment
+        run: curl --fail --silent --show-error "$PRODUCTION_URL" > /dev/null
+
+      - name: Publish deployment summary
+        run: |
+          echo "## Production deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: $PRODUCTION_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "- CloudFront invalidation: ${{ steps.invalidate.outputs.id }}" >> "$GITHUB_STEP_SUMMARY"

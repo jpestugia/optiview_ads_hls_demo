@@ -1,0 +1,15 @@
+node_modules/
+dist/
+public/theoplayer/
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.log
+npm-debug.log*
+*.mp4
+
+.vscode/
+.idea/
