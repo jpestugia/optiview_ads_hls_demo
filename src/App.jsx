@@ -493,9 +493,9 @@ export default function App() {
 
     instance.muted = true;
     instance.autoplay = true;
-    instance.addEventListener("addadbreak", (event) => handleAdBreakAdded(playerId, instance, event));
-    instance.addEventListener("adbreakbegin", (event) => handleAdBreakBegin(playerId, event));
-    instance.addEventListener("adbreakend", (event) => handleAdBreakEnd(playerId, event));
+    instance.ads.addEventListener("addadbreak", (event) => handleAdBreakAdded(playerId, instance, event));
+    instance.ads.addEventListener("adbreakbegin", (event) => handleAdBreakBegin(playerId, event));
+    instance.ads.addEventListener("adbreakend", (event) => handleAdBreakEnd(playerId, event));
 
     playerRefs.current[playerId] = instance;
     setPlayerSource(instance, playerId);
