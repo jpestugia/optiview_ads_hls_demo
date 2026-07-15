@@ -188,16 +188,13 @@ function PlayerCard({ title, status, containerRef, onSchedule, countdown }) {
   );
 }
 
-function DevicePlayerCard({ title, streamLabel, device, containerRef }) {
+function DevicePlayerCard({ title, device, containerRef }) {
   const isTv = device === "tv";
 
   return (
-    <Card className="overflow-hidden shadow-sm">
-      <CardHeader className="flex-row items-center justify-between space-y-0 p-3 pb-2">
-        <CardTitle className="text-base">{title}</CardTitle>
-        <Badge variant="secondary">{streamLabel}</Badge>
-      </CardHeader>
-      <CardContent className="flex min-h-[260px] items-center justify-center p-4 pt-1">
+    <div className="overflow-hidden">
+      <h3 className="mb-2 text-center text-base font-semibold">{title}</h3>
+      <div className="flex min-h-[260px] items-center justify-center p-4 pt-1">
         {isTv ? (
           <div className="w-full max-w-2xl pb-5">
             <div className="rounded-[1.15rem] border-[10px] border-neutral-800 bg-neutral-950 p-1 shadow-[0_22px_55px_rgba(0,0,0,0.35)] ring-1 ring-white/10">
@@ -224,8 +221,8 @@ function DevicePlayerCard({ title, streamLabel, device, containerRef }) {
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -748,20 +745,14 @@ export default function App() {
             countdown={countdowns[2]}
           />
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Device previews</h2>
-          <span className="text-xs text-muted-foreground">Mirrors the two monetized streams</span>
-        </div>
         <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-2">
           <DevicePlayerCard
             title="Living Room TV"
-            streamLabel="Stream 1 mirror"
             device="tv"
             containerRef={setPlayer3ContainerRef}
           />
           <DevicePlayerCard
             title="Landscape Phone"
-            streamLabel="Stream 2 mirror"
             device="phone"
             containerRef={setPlayer4ContainerRef}
           />
