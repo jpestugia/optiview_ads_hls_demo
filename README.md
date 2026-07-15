@@ -1,6 +1,6 @@
 # OptiView Ads HLS Demo
 
-A React demonstration console for OptiView Ads signaling, dynamic ad-break scheduling, and THEOplayer HLS playback. It includes working Unified Streaming and OptiView HLS templates with two synchronized player instances.
+A React demonstration console for OptiView Ads signaling, dynamic ad-break scheduling, and THEOplayer HLS playback. It includes working Unified Streaming and OptiView HLS templates with four THEOplayer instances across two synchronized monetized streams.
 
 ![Dolby OptiView — drive engagement and ad revenue](public/backdrops/ads-optiview-sgai-double.jpg)
 
@@ -22,6 +22,7 @@ The application works from the base URL. Releases set `index.html` to no-cache a
 - In-browser API request and response log
 - Packaged 68-second OptiView sports sizzle HLS ad
 - Layout-specific Double Box and L-shape backdrop images
+- Living-room TV and landscape-phone device previews that mirror the two monetized streams
 
 ## Requirements
 

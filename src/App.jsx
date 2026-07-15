@@ -142,6 +142,8 @@ const AD_LAYOUTS = [
   ["LSHAPE_AD", "L Ad"],
   ["LSHAPE_CONTENT", "L Content"],
 ];
+const PLAYER_IDS = [1, 2, 3, 4];
+const PLAYER_STREAMS = { 1: 1, 2: 2, 3: 1, 4: 2 };
 
 function PlayerCard({ title, status, containerRef, onSchedule, countdown }) {
   return (
@@ -186,6 +188,47 @@ function PlayerCard({ title, status, containerRef, onSchedule, countdown }) {
   );
 }
 
+function DevicePlayerCard({ title, streamLabel, device, containerRef }) {
+  const isTv = device === "tv";
+
+  return (
+    <Card className="overflow-hidden shadow-sm">
+      <CardHeader className="flex-row items-center justify-between space-y-0 p-3 pb-2">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <Badge variant="secondary">{streamLabel}</Badge>
+      </CardHeader>
+      <CardContent className="flex min-h-[260px] items-center justify-center p-4 pt-1">
+        {isTv ? (
+          <div className="w-full max-w-2xl pb-5">
+            <div className="rounded-[1.15rem] border-[10px] border-neutral-800 bg-neutral-950 p-1 shadow-[0_22px_55px_rgba(0,0,0,0.35)] ring-1 ring-white/10">
+              <div
+                ref={containerRef}
+                className="aspect-video min-w-0 overflow-hidden rounded-lg bg-black theoplayer-container video-js theoplayer-skin vjs-16-9"
+              />
+              <div className="relative h-4" aria-hidden="true">
+                <span className="absolute right-3 top-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]" />
+              </div>
+            </div>
+            <div className="mx-auto h-7 w-16 bg-gradient-to-b from-neutral-700 to-neutral-900" aria-hidden="true" />
+            <div className="mx-auto h-2.5 w-52 rounded-full bg-neutral-800 shadow-lg" aria-hidden="true" />
+          </div>
+        ) : (
+          <div className="w-full max-w-2xl rounded-[2.5rem] border-[10px] border-neutral-900 bg-neutral-950 p-1.5 shadow-[0_22px_55px_rgba(0,0,0,0.35)] ring-1 ring-white/10">
+            <div className="relative overflow-hidden rounded-[1.75rem] bg-black">
+              <div
+                ref={containerRef}
+                className="aspect-video min-w-0 overflow-hidden bg-black theoplayer-container video-js theoplayer-skin vjs-16-9"
+              />
+              <span className="absolute left-1.5 top-1/2 z-20 h-12 w-2 -translate-y-1/2 rounded-full bg-neutral-950/95 shadow-sm" aria-hidden="true" />
+              <span className="absolute right-1.5 top-1/2 z-20 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-neutral-700 ring-1 ring-black" aria-hidden="true" />
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function App() {
   const [config, setConfig] = useState(defaultConfig);
   const [logText, setLogText] = useState("");
@@ -194,12 +237,22 @@ export default function App() {
   const [countdowns, setCountdowns] = useState({ 1: null, 2: null });
 
   const configRef = useRef(config);
-  const player1ContainerRef = useRef(null);
-  const player2ContainerRef = useRef(null);
-  const player1Ref = useRef(null);
-  const player2Ref = useRef(null);
+  const playerContainerRefs = useRef({});
+  const playerRefs = useRef({});
   const countdownTimersRef = useRef({ 1: null, 2: null });
   const playerRecreateTimerRef = useRef(null);
+  const setPlayer1ContainerRef = useCallback((node) => {
+    playerContainerRefs.current[1] = node;
+  }, []);
+  const setPlayer2ContainerRef = useCallback((node) => {
+    playerContainerRefs.current[2] = node;
+  }, []);
+  const setPlayer3ContainerRef = useCallback((node) => {
+    playerContainerRefs.current[3] = node;
+  }, []);
+  const setPlayer4ContainerRef = useCallback((node) => {
+    playerContainerRefs.current[4] = node;
+  }, []);
 
   useEffect(() => {
     configRef.current = config;
@@ -234,14 +287,15 @@ export default function App() {
     return `https://${host}/signaling-service/api/v1/${streamId}/hls/${manifestPath}`;
   }, [getStreamId]);
 
-  const setPlayerSource = useCallback((instance, which, sourceConfig = configRef.current) => {
-    const playerInstance = instance || (which === 1 ? player1Ref.current : player2Ref.current);
+  const setPlayerSource = useCallback((instance, playerId, sourceConfig = configRef.current) => {
+    const playerInstance = instance || playerRefs.current[playerId];
     if (!playerInstance) return;
 
-    const src = currentSourceSrc(which, sourceConfig);
+    const streamIndex = PLAYER_STREAMS[playerId];
+    const src = currentSourceSrc(streamIndex, sourceConfig);
     const networkCode = sourceConfig.networkCode.trim();
-    const customAssetKey = getAssetKey(which, sourceConfig);
-    const adUnit = getAdUnit(which, sourceConfig);
+    const customAssetKey = getAssetKey(streamIndex, sourceConfig);
+    const adUnit = getAdUnit(streamIndex, sourceConfig);
     const iu = adUnit ? `/${networkCode}/${adUnit}` : `/${networkCode}/`;
     const source = {
       sources: {
@@ -265,7 +319,8 @@ export default function App() {
     playerInstance.source = source;
 
     log("Player source set", {
-      player: which,
+      player: playerId,
+      stream: streamIndex,
       src,
       networkCode,
       customAssetKey,
@@ -273,8 +328,8 @@ export default function App() {
     });
   }, [currentSourceSrc, getAdUnit, getAssetKey, log]);
 
-  const destroyPlayer = useCallback((which) => {
-    const instance = which === 1 ? player1Ref.current : player2Ref.current;
+  const destroyPlayer = useCallback((playerId) => {
+    const instance = playerRefs.current[playerId];
 
     if (instance?.destroy) {
       try {
@@ -284,17 +339,13 @@ export default function App() {
       }
     }
 
-    if (which === 1) {
-      player1Ref.current = null;
-      if (player1ContainerRef.current) player1ContainerRef.current.innerHTML = "";
-    } else {
-      player2Ref.current = null;
-      if (player2ContainerRef.current) player2ContainerRef.current.innerHTML = "";
-    }
+    playerRefs.current[playerId] = null;
+    const container = playerContainerRefs.current[playerId];
+    if (container) container.innerHTML = "";
   }, []);
 
-  const createPlayer = useCallback((which) => {
-    const container = which === 1 ? player1ContainerRef.current : player2ContainerRef.current;
+  const createPlayer = useCallback((playerId) => {
+    const container = playerContainerRefs.current[playerId];
     if (!container || !window.THEOplayer?.Player) return;
 
     if (!THEOPLAYER_LICENSE) {
@@ -303,7 +354,7 @@ export default function App() {
       return;
     }
 
-    destroyPlayer(which);
+    destroyPlayer(playerId);
 
     const instance = new window.THEOplayer.Player(container, {
       libraryLocation: "/theoplayer",
@@ -314,17 +365,12 @@ export default function App() {
     instance.muted = true;
     instance.autoplay = true;
     instance.addEventListener("adbreakbegin", (event) => {
-      log(`adbreakbegin (player ${which})`, event);
+      log(`adbreakbegin (player ${playerId})`, event);
     });
 
-    if (which === 1) {
-      player1Ref.current = instance;
-    } else {
-      player2Ref.current = instance;
-    }
-
-    setPlayerSource(instance, which);
-    setStatus(`Player ${which} ready.`);
+    playerRefs.current[playerId] = instance;
+    setPlayerSource(instance, playerId);
+    setStatus(`Player ${playerId} ready.`);
     window.setTimeout(() => setStatus(""), 2000);
   }, [destroyPlayer, log, setPlayerSource]);
 
@@ -368,12 +414,10 @@ export default function App() {
       window.clearTimeout(playerRecreateTimerRef.current);
     }
 
-    destroyPlayer(1);
-    destroyPlayer(2);
+    PLAYER_IDS.forEach(destroyPlayer);
     playerRecreateTimerRef.current = window.setTimeout(() => {
       playerRecreateTimerRef.current = null;
-      createPlayer(1);
-      createPlayer(2);
+      PLAYER_IDS.forEach(createPlayer);
     }, 0);
   }, [createPlayer, destroyPlayer, log, setConfigField]);
 
@@ -527,15 +571,17 @@ export default function App() {
 
     return Promise.all([createFor(1), createFor(2)])
       .then(() => {
-        setPlayerSource(player1Ref.current, 1);
-        setPlayerSource(player2Ref.current, 2);
+        PLAYER_IDS.forEach((playerId) => {
+          setPlayerSource(playerRefs.current[playerId], playerId);
+        });
       })
       .catch((error) => log("Create stream error", String(error)));
   }, [apiRequest, getAssetKey, getStreamId, log, setPlayerSource]);
 
   const applyPlayerSources = useCallback(() => {
-    setPlayerSource(player1Ref.current, 1);
-    setPlayerSource(player2Ref.current, 2);
+    PLAYER_IDS.forEach((playerId) => {
+      setPlayerSource(playerRefs.current[playerId], playerId);
+    });
   }, [setPlayerSource]);
 
   const listStreams = useCallback(() => {
@@ -565,15 +611,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    createPlayer(1);
-    createPlayer(2);
+    PLAYER_IDS.forEach(createPlayer);
 
     return () => {
       if (playerRecreateTimerRef.current) {
         window.clearTimeout(playerRecreateTimerRef.current);
       }
-      destroyPlayer(1);
-      destroyPlayer(2);
+      PLAYER_IDS.forEach(destroyPlayer);
       Object.values(countdownTimersRef.current).forEach((timer) => {
         if (timer) clearInterval(timer);
       });
@@ -688,20 +732,38 @@ export default function App() {
         </details>
       </Card>
 
-      <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-        <div className="grid min-h-0 grid-cols-1 items-start gap-4 overflow-auto lg:grid-cols-2">
+      <section className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
           <PlayerCard
             title="Player 1 / OptiView Ads"
             status={status}
-            containerRef={player1ContainerRef}
+            containerRef={setPlayer1ContainerRef}
             onSchedule={(layout) => scheduleBreak(1, layout, 15)}
             countdown={countdowns[1]}
           />
           <PlayerCard
             title="Player 2 / OptiView Ads"
-            containerRef={player2ContainerRef}
+            containerRef={setPlayer2ContainerRef}
             onSchedule={(layout) => scheduleBreak(2, layout, 15)}
             countdown={countdowns[2]}
+          />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Device previews</h2>
+          <span className="text-xs text-muted-foreground">Mirrors the two monetized streams</span>
+        </div>
+        <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-2">
+          <DevicePlayerCard
+            title="Living Room TV"
+            streamLabel="Stream 1 mirror"
+            device="tv"
+            containerRef={setPlayer3ContainerRef}
+          />
+          <DevicePlayerCard
+            title="Landscape Phone"
+            streamLabel="Stream 2 mirror"
+            device="phone"
+            containerRef={setPlayer4ContainerRef}
           />
         </div>
       </section>
