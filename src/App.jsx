@@ -157,6 +157,15 @@ function PlayerCard({ title, status, containerRef, onSchedule, countdown }) {
           {AD_LAYOUTS.map(([layout, label]) => {
             const hasCountdown = Boolean(countdown);
             const isActive = countdown?.layout === layout;
+            const countdownText = countdown?.phase === "scheduled"
+              ? `Insert in ${countdown.remainingSeconds}s`
+              : countdown?.phase === "waiting"
+                ? `Waiting for manifest (${countdown.elapsedSeconds}s)`
+                : countdown?.phase === "detected"
+                  ? countdown.remainingSeconds > 0
+                    ? `Ad starts in ${countdown.remainingSeconds}s`
+                    : "Starting ad…"
+                  : "Ad playing";
             return (
               <Button
                 key={layout}
@@ -173,7 +182,7 @@ function PlayerCard({ title, status, containerRef, onSchedule, countdown }) {
                 ) : null}
                 <span className="relative z-10 flex flex-col leading-tight">
                   <span>{label}</span>
-                  {isActive ? <span className="text-[10px] font-normal text-muted-foreground">Ad starts in {countdown.remainingSeconds}s</span> : null}
+                  {isActive ? <span className="text-[10px] font-normal text-muted-foreground">{countdownText}</span> : null}
                 </span>
               </Button>
             );
@@ -236,6 +245,7 @@ export default function App() {
   const configRef = useRef(config);
   const playerContainerRefs = useRef({});
   const playerRefs = useRef({});
+  const countdownsRef = useRef(countdowns);
   const countdownTimersRef = useRef({ 1: null, 2: null });
   const playerRecreateTimerRef = useRef(null);
   const setPlayer1ContainerRef = useCallback((node) => {
@@ -254,6 +264,10 @@ export default function App() {
   useEffect(() => {
     configRef.current = config;
   }, [config]);
+
+  useEffect(() => {
+    countdownsRef.current = countdowns;
+  }, [countdowns]);
 
   const setConfigField = useCallback((field, value) => {
     setConfig((previous) => ({ ...previous, [field]: value }));
@@ -341,6 +355,124 @@ export default function App() {
     if (container) container.innerHTML = "";
   }, []);
 
+  const clearCountdownTimer = useCallback((which) => {
+    if (countdownTimersRef.current[which]) {
+      clearInterval(countdownTimersRef.current[which]);
+      countdownTimersRef.current[which] = null;
+    }
+  }, []);
+
+  const setupCountdown = useCallback((which, startTime, layout, totalSeconds) => {
+    if (!startTime) return;
+
+    clearCountdownTimer(which);
+    let startTimeReached = false;
+    const totalMs = Math.max(totalSeconds * 1000, 1);
+    const update = () => {
+      const diff = startTime.getTime() - Date.now();
+      const waiting = diff <= 0;
+      const remainingSeconds = Math.max(Math.ceil(diff / 1000), 0);
+      const elapsedSeconds = Math.max(Math.floor(-diff / 1000), 0);
+      const progress = waiting ? 0 : Math.max(Math.min((diff / totalMs) * 100, 100), 0);
+
+      if (waiting && !startTimeReached) {
+        startTimeReached = true;
+        log(`Player ${which}`, "Insertion time reached; waiting for the player to detect the manifest ad break.");
+      }
+
+      setCountdowns((previous) => ({
+        ...previous,
+        [which]: {
+          layout,
+          phase: waiting ? "waiting" : "scheduled",
+          remainingSeconds,
+          elapsedSeconds,
+          progress,
+        },
+      }));
+    };
+
+    update();
+    countdownTimersRef.current[which] = setInterval(update, 250);
+  }, [clearCountdownTimer, log]);
+
+  const trackDetectedAdBreak = useCallback((which, instance, adBreak) => {
+    if (!countdownsRef.current[which]) return;
+
+    const timeOffset = Number(adBreak?.timeOffset);
+    const detectedAt = Number(instance.currentTime);
+    if (!Number.isFinite(timeOffset) || !Number.isFinite(detectedAt) || timeOffset < detectedAt - 0.5) return;
+
+    clearCountdownTimer(which);
+    const initialDistance = Math.max(timeOffset - detectedAt, 0.25);
+    const update = () => {
+      const currentTime = Number(instance.currentTime);
+      if (!Number.isFinite(currentTime)) return;
+
+      const remaining = Math.max(timeOffset - currentTime, 0);
+      setCountdowns((previous) => {
+        const current = previous[which];
+        if (!current || current.phase === "playing") return previous;
+
+        return {
+          ...previous,
+          [which]: {
+            ...current,
+            phase: "detected",
+            remainingSeconds: Math.ceil(remaining),
+            elapsedSeconds: 0,
+            progress: Math.max(Math.min((remaining / initialDistance) * 100, 100), 0),
+          },
+        };
+      });
+    };
+
+    log(`Player ${which}`, {
+      message: "Manifest ad break detected.",
+      currentTime: detectedAt,
+      adBreakTimeOffset: timeOffset,
+    });
+    update();
+    countdownTimersRef.current[which] = setInterval(update, 250);
+  }, [clearCountdownTimer, log]);
+
+  const handleAdBreakAdded = useCallback((playerId, instance, event) => {
+    const which = PLAYER_STREAMS[playerId];
+    if (playerId !== which) return;
+    trackDetectedAdBreak(which, instance, event.adBreak);
+  }, [trackDetectedAdBreak]);
+
+  const handleAdBreakBegin = useCallback((playerId, event) => {
+    const which = PLAYER_STREAMS[playerId];
+    log(`adbreakbegin (player ${playerId})`, event);
+    if (playerId !== which || !countdownsRef.current[which]) return;
+
+    clearCountdownTimer(which);
+    setCountdowns((previous) => {
+      const current = previous[which];
+      if (!current) return previous;
+      return {
+        ...previous,
+        [which]: {
+          ...current,
+          phase: "playing",
+          remainingSeconds: 0,
+          elapsedSeconds: 0,
+          progress: 100,
+        },
+      };
+    });
+  }, [clearCountdownTimer, log]);
+
+  const handleAdBreakEnd = useCallback((playerId, event) => {
+    const which = PLAYER_STREAMS[playerId];
+    log(`adbreakend (player ${playerId})`, event);
+    if (playerId !== which) return;
+
+    clearCountdownTimer(which);
+    setCountdowns((previous) => ({ ...previous, [which]: null }));
+  }, [clearCountdownTimer, log]);
+
   const createPlayer = useCallback((playerId) => {
     const container = playerContainerRefs.current[playerId];
     if (!container || !window.THEOplayer?.Player) return;
@@ -361,15 +493,15 @@ export default function App() {
 
     instance.muted = true;
     instance.autoplay = true;
-    instance.addEventListener("adbreakbegin", (event) => {
-      log(`adbreakbegin (player ${playerId})`, event);
-    });
+    instance.addEventListener("addadbreak", (event) => handleAdBreakAdded(playerId, instance, event));
+    instance.addEventListener("adbreakbegin", (event) => handleAdBreakBegin(playerId, event));
+    instance.addEventListener("adbreakend", (event) => handleAdBreakEnd(playerId, event));
 
     playerRefs.current[playerId] = instance;
     setPlayerSource(instance, playerId);
     setStatus(`Player ${playerId} ready.`);
     window.setTimeout(() => setStatus(""), 2000);
-  }, [destroyPlayer, log, setPlayerSource]);
+  }, [destroyPlayer, handleAdBreakAdded, handleAdBreakBegin, handleAdBreakEnd, log, setPlayerSource]);
 
   const applyTemplate = useCallback((name) => {
     const template = TEMPLATES[name];
@@ -458,39 +590,6 @@ export default function App() {
 
     log("Response", { status: response.status, ok: response.ok, data });
     return data;
-  }, [log]);
-
-  const setupCountdown = useCallback((which, startTime, layout, totalSeconds) => {
-    if (!startTime) return;
-
-    if (countdownTimersRef.current[which]) {
-      clearInterval(countdownTimersRef.current[which]);
-      countdownTimersRef.current[which] = null;
-    }
-
-    const totalMs = Math.max(totalSeconds * 1000, 1);
-    const update = () => {
-      const diff = startTime.getTime() - Date.now();
-      const remainingSeconds = Math.max(Math.ceil(diff / 1000), 0);
-      const progress = Math.max(Math.min((diff / totalMs) * 100, 100), 0);
-
-      setCountdowns((previous) => ({
-        ...previous,
-        [which]: { layout, remainingSeconds, progress },
-      }));
-
-      if (diff <= 0) {
-        log(`Player ${which}`, "Ad break start time reached.");
-        clearInterval(countdownTimersRef.current[which]);
-        countdownTimersRef.current[which] = null;
-        window.setTimeout(() => {
-          setCountdowns((previous) => ({ ...previous, [which]: null }));
-        }, 1200);
-      }
-    };
-
-    update();
-    countdownTimersRef.current[which] = setInterval(update, 250);
   }, [log]);
 
   const scheduleBreak = useCallback((which, layoutOverride, startDelaySeconds) => {
@@ -615,11 +714,9 @@ export default function App() {
         window.clearTimeout(playerRecreateTimerRef.current);
       }
       PLAYER_IDS.forEach(destroyPlayer);
-      Object.values(countdownTimersRef.current).forEach((timer) => {
-        if (timer) clearInterval(timer);
-      });
+      Object.keys(countdownTimersRef.current).forEach(clearCountdownTimer);
     };
-  }, [createPlayer, destroyPlayer]);
+  }, [clearCountdownTimer, createPlayer, destroyPlayer]);
 
   const templateOptions = useMemo(() => Object.entries(TEMPLATES), []);
 
