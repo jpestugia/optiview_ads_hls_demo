@@ -444,7 +444,11 @@ export default function App() {
 
   const handleAdBreakBegin = useCallback((playerId, event) => {
     const which = PLAYER_STREAMS[playerId];
-    log(`adbreakbegin (player ${playerId})`, event);
+    log(`adbreakbegin (player ${playerId})`, {
+      integration: event.adBreak?.integration,
+      timeOffset: event.adBreak?.timeOffset,
+      maxDuration: event.adBreak?.maxDuration,
+    });
     if (playerId !== which || !countdownsRef.current[which]) return;
 
     clearCountdownTimer(which);
@@ -466,7 +470,11 @@ export default function App() {
 
   const handleAdBreakEnd = useCallback((playerId, event) => {
     const which = PLAYER_STREAMS[playerId];
-    log(`adbreakend (player ${playerId})`, event);
+    log(`adbreakend (player ${playerId})`, {
+      integration: event.adBreak?.integration,
+      timeOffset: event.adBreak?.timeOffset,
+      maxDuration: event.adBreak?.maxDuration,
+    });
     if (playerId !== which) return;
 
     clearCountdownTimer(which);
