@@ -53,12 +53,31 @@ jobs:
           VITE_THEO_LIVE_API_TOKEN: ${{ secrets.VITE_THEO_LIVE_API_TOKEN }}
         run: npm run build
 
+      - name: Inspect OIDC claims
+        run: |
+          response=$(curl --fail --silent --show-error \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")
+          token=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<< "$response")
+          TOKEN="$token" python3 - <<'PY'
+          import base64
+          import json
+          import os
+
+          payload = os.environ["TOKEN"].split(".")[1]
+          payload += "=" * (-len(payload) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(payload))
+          keys = ["aud", "sub", "repository", "ref", "environment", "job_workflow_ref"]
+          print(json.dumps({key: claims.get(key) for key in keys}, indent=2))
+          PY
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: optiview-ads-hls-demo
+          disable-retry: true
 
       - name: Deploy to S3
         run: |
