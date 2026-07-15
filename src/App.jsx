@@ -12,6 +12,14 @@ import { Textarea } from "./components/ui/textarea";
 
 const THEO_LIVE_API_TOKEN = import.meta.env.VITE_THEO_LIVE_API_TOKEN?.trim() || "";
 const THEOPLAYER_LICENSE = import.meta.env.VITE_THEOPLAYER_LICENSE?.trim() || "";
+const PUBLIC_ASSET_BASE_URL = (
+  import.meta.env.VITE_PUBLIC_ASSET_BASE_URL?.trim() || "https://d2aunrdp7zsc16.cloudfront.net"
+).replace(/\/$/, "");
+const DEMO_ASSETS = {
+  adPlaylistUrl: `${PUBLIC_ASSET_BASE_URL}/ads/optiview-sports-sizzle/index.m3u8`,
+  backdropDoubleUri: `${PUBLIC_ASSET_BASE_URL}/backdrops/ads-optiview-sgai-double.jpg`,
+  backdropLShapeUri: `${PUBLIC_ASSET_BASE_URL}/backdrops/ads-optiview-sgai-l.jpg`,
+};
 
 const TEMPLATES = {
   unified: {
@@ -28,9 +36,10 @@ const TEMPLATES = {
     layout: "",
     originUrl: "https://demo.unified-streaming.com",
     segOrigin: "https://demo.unified-streaming.com/k8s/live/stable/live.isml/.m3u8",
-    adPlaylistUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-    breakDuration: 15,
-    backdropURI: "https://testing.theo.live/theoads/THEOads_double_box.png",
+    adPlaylistUrl: DEMO_ASSETS.adPlaylistUrl,
+    breakDuration: 68,
+    backdropDoubleURI: DEMO_ASSETS.backdropDoubleUri,
+    backdropLShapeURI: DEMO_ASSETS.backdropLShapeUri,
   },
   optiviewHls: {
     label: "OptiView HLS demo",
@@ -47,9 +56,10 @@ const TEMPLATES = {
     layout: "",
     originUrl: "https://fastly.cdn.theo.live",
     segOrigin: "https://fastly.cdn.theo.live",
-    adPlaylistUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-    breakDuration: 15,
-    backdropURI: "https://testing.theo.live/theoads/THEOads_double_box.png",
+    adPlaylistUrl: DEMO_ASSETS.adPlaylistUrl,
+    breakDuration: 68,
+    backdropDoubleURI: DEMO_ASSETS.backdropDoubleUri,
+    backdropLShapeURI: DEMO_ASSETS.backdropLShapeUri,
   },
   custom: {
     label: "Custom",
@@ -72,13 +82,22 @@ const defaultConfig = {
   segOrigin: TEMPLATES.optiviewHls.segOrigin,
   adPlaylistUrl: TEMPLATES.optiviewHls.adPlaylistUrl,
   breakDuration: String(TEMPLATES.optiviewHls.breakDuration),
-  backdropUri: TEMPLATES.optiviewHls.backdropURI,
+  backdropDoubleUri: TEMPLATES.optiviewHls.backdropDoubleURI,
+  backdropLShapeUri: TEMPLATES.optiviewHls.backdropLShapeURI,
   extraFieldsJson: "",
   includeLayout: true,
   includeOrigin: true,
   includeSegmentOrigin: true,
   includeBackdrop: true,
 };
+
+function getBackdropUri(layout, sourceConfig) {
+  if (layout === "DOUBLE") return sourceConfig.backdropDoubleUri.trim();
+  if (layout === "LSHAPE_AD" || layout === "LSHAPE_CONTENT") {
+    return sourceConfig.backdropLShapeUri.trim();
+  }
+  return "";
+}
 
 function bumpSuffixValue(value) {
   const trimmed = value.trim();
@@ -238,6 +257,8 @@ export default function App() {
         networkCode,
         customAssetKey,
         adTagParameters: { iu },
+        backdropDoubleBox: sourceConfig.backdropDoubleUri.trim(),
+        backdropLShape: sourceConfig.backdropLShapeUri.trim(),
       },
     ];
 
@@ -334,7 +355,8 @@ export default function App() {
       segOrigin: template.segOrigin,
       adPlaylistUrl: template.adPlaylistUrl,
       breakDuration: String(template.breakDuration),
-      backdropUri: template.backdropURI,
+      backdropDoubleUri: template.backdropDoubleURI,
+      backdropLShapeUri: template.backdropLShapeURI,
       extraFieldsJson: "",
     };
 
@@ -448,6 +470,11 @@ export default function App() {
       body.assetURI = adPlaylist;
     }
 
+    const backdropUri = getBackdropUri(layout, sourceConfig);
+    if (backdropUri) {
+      body.backdropURI = backdropUri;
+    }
+
     log("Schedule break", { which, streamId, body });
     setupCountdown(which, startTime, layout, startDelaySeconds);
 
@@ -464,7 +491,7 @@ export default function App() {
     const origin = sourceConfig.originUrl.trim();
     const segmentOrigin = sourceConfig.segOrigin.trim();
     const layout = sourceConfig.layout || "SINGLE";
-    const backdropUriValue = sourceConfig.backdropUri.trim();
+    const backdropUriValue = getBackdropUri(layout, sourceConfig);
     let extraFields = null;
 
     const raw = sourceConfig.extraFieldsJson.trim();
@@ -615,7 +642,8 @@ export default function App() {
                 <Field id="segOrigin" label="Segment Origin" value={config.segOrigin} onChange={(value) => setConfigField("segOrigin", value)} />
                 <Field id="adPlaylistUrl" label="Ad Playlist URL" value={config.adPlaylistUrl} onChange={(value) => setConfigField("adPlaylistUrl", value)} />
                 <Field id="breakDuration" label="Break Duration (seconds)" type="number" value={config.breakDuration} onChange={(value) => setConfigField("breakDuration", value)} />
-                <Field id="backdropUri" label="Backdrop URI" value={config.backdropUri} onChange={(value) => setConfigField("backdropUri", value)} />
+                <Field id="backdropDoubleUri" label="Double Box Backdrop URI" value={config.backdropDoubleUri} onChange={(value) => setConfigField("backdropDoubleUri", value)} />
+                <Field id="backdropLShapeUri" label="L-Shape Backdrop URI" value={config.backdropLShapeUri} onChange={(value) => setConfigField("backdropLShapeUri", value)} />
                 <div className="space-y-1.5 md:col-span-2 xl:col-span-3">
                   <Label htmlFor="extraFieldsJson">Extra request fields (JSON)</Label>
                   <Textarea

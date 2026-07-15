@@ -19,6 +19,7 @@ env:
   S3_BUCKET: optiview-ads-demo-031949581493-eu-west-2
   CLOUDFRONT_DISTRIBUTION_ID: E35S9M2T3Q49L5
   PRODUCTION_URL: https://d2aunrdp7zsc16.cloudfront.net/
+  VITE_PUBLIC_ASSET_BASE_URL: https://d2aunrdp7zsc16.cloudfront.net
 
 jobs:
   deploy:

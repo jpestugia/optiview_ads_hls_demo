@@ -2,7 +2,7 @@
 
 A React demonstration console for OptiView Ads signaling, dynamic ad-break scheduling, and THEOplayer HLS playback. It includes working Unified Streaming and OptiView HLS templates with two synchronized player instances.
 
-![Dolby OptiView — drive engagement and ad revenue](ads-optiview-sgai-double.jpg)
+![Dolby OptiView — drive engagement and ad revenue](public/backdrops/ads-optiview-sgai-double.jpg)
 
 ## Live demo
 
@@ -20,6 +20,8 @@ The application works from the base URL. Releases set `index.html` to no-cache a
 - Per-player countdown indicators
 - Clean player recreation when switching templates
 - In-browser API request and response log
+- Packaged 68-second OptiView sports sizzle HLS ad
+- Layout-specific Double Box and L-shape backdrop images
 
 ## Requirements
 
@@ -41,8 +43,11 @@ Set these values in `.env.local`:
 | --- | --- |
 | `VITE_THEOPLAYER_LICENSE` | THEOplayer browser license |
 | `VITE_THEO_LIVE_API_TOKEN` | OptiView Ads API token used by API actions |
+| `VITE_PUBLIC_ASSET_BASE_URL` | Public base URL used by OptiView Ads to fetch the HLS ad and backdrop images |
 
 The THEOplayer runtime files are copied from the pinned npm dependency into `public/theoplayer` before development and production builds. Generated runtime files are not committed.
+
+The demo ad is served from `public/ads/optiview-sports-sizzle/index.m3u8`. Double Box breaks use `public/backdrops/ads-optiview-sgai-double.jpg`; L-shape breaks use `public/backdrops/ads-optiview-sgai-l.jpg`. These URLs must be publicly reachable because OptiView Ads fetches them while creating the break.
 
 ## Build
 
